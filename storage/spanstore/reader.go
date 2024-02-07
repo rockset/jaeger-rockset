@@ -28,19 +28,20 @@ ORDER BY
 	sql := fmt.Sprintf(q, s.config.Workspace, s.config.Operations)
 	s.logger.Info("GetServices query", "sql", sql)
 
-	result, err := s.rc.Query(ctx, sql)
+	response, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
 
-	services := make([]string, 0, len(result.Results))
-	for _, row := range result.Results {
+	services := make([]string, 0, len(response.Results))
+	for _, row := range response.Results {
 		if row["service"] != nil {
 			services = append(services, row["service"].(string))
 		}
 	}
 	span.SetTag("services", len(services))
-	s.logger.Info("GetServices result", "services", len(services))
+	stats := response.GetStats()
+	s.logger.Info("GetServices result", "services", len(services), "ms", stats.GetElapsedTimeMs())
 
 	return services, nil
 }
@@ -55,8 +56,8 @@ func (s Store) GetOperations(ctx context.Context, query spanstore.OperationQuery
 FROM
     %s.%s operations
 WHERE
-    operations.service = '%s'
-	AND operations.span_kind %s
+    operations.service = '%s' AND
+    operations.span_kind %s
 GROUP BY
     operation,
     spankind
@@ -75,13 +76,13 @@ ORDER BY
 	sql := fmt.Sprintf(q, s.config.Workspace, s.config.Operations, query.ServiceName, kind)
 	s.logger.Info("GetOperations query", "sql", sql)
 
-	result, err := s.rc.Query(ctx, sql)
+	response, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
 
-	operations := make([]spanstore.Operation, 0, len(result.Results))
-	for _, row := range result.Results {
+	operations := make([]spanstore.Operation, 0, len(response.Results))
+	for _, row := range response.Results {
 		if row["operation"] == nil {
 			s.logger.Warn("ignoring", "row", row)
 			continue
@@ -93,7 +94,8 @@ ORDER BY
 		})
 	}
 	span.SetTag("operations", len(operations))
-	s.logger.Info("GetOperations result", "operations", len(operations))
+	stats := response.GetStats()
+	s.logger.Info("GetOperations result", "operations", len(operations), "ms", stats.GetElapsedTimeMs())
 
 	return operations, nil
 }
@@ -115,7 +117,8 @@ func (s Store) GetTrace(ctx context.Context, tid model.TraceID) (*model.Trace, e
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Info("GetTrace result", "spans", len(response.Results))
+	stats := response.GetStats()
+	s.logger.Info("GetTrace result", "spans", len(response.Results), "ms", stats.GetElapsedTimeMs())
 
 	if len(response.Results) == 0 {
 		return nil, spanstore.ErrTraceNotFound
@@ -156,6 +159,7 @@ func (s Store) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryPara
 	p := paginate.New(s.rc)
 	docs := make(chan map[string]any)
 
+	// TODO should this use a plain query instead of a paginated one, as we want to put a limit on the number of results?
 	var err error
 	go func() {
 		err = p.Query(ctx, docs, sql)

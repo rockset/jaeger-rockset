@@ -1,5 +1,7 @@
 FROM golang AS builder
 
+ENV CGO_ENABLED=0
+
 COPY . /src
 RUN cd /src && go vet ./... &&  go build -o /jaeger-rockset ./cmd/jaeger-rockset
 
