@@ -25,8 +25,10 @@ GROUP BY
 ORDER BY
     service
 `
-	q2 := fmt.Sprintf(q, s.config.Workspace, s.config.Operations)
-	result, err := s.rc.Query(ctx, q2)
+	sql := fmt.Sprintf(q, s.config.Workspace, s.config.Operations)
+	s.logger.Info("GetServices query", "sql", sql)
+
+	result, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +40,7 @@ ORDER BY
 		}
 	}
 	span.SetTag("services", len(services))
+	s.logger.Info("GetServices result", "services", len(services))
 
 	return services, nil
 }
@@ -69,9 +72,10 @@ ORDER BY
 	span.SetTag("service", query.ServiceName)
 	span.SetTag("spankind", kind)
 
-	q2 := fmt.Sprintf(q, s.config.Workspace, s.config.Operations, query.ServiceName, kind)
+	sql := fmt.Sprintf(q, s.config.Workspace, s.config.Operations, query.ServiceName, kind)
+	s.logger.Info("GetOperations query", "sql", sql)
 
-	result, err := s.rc.Query(ctx, q2)
+	result, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +93,7 @@ ORDER BY
 		})
 	}
 	span.SetTag("operations", len(operations))
+	s.logger.Info("GetOperations result", "operations", len(operations))
 
 	return operations, nil
 }
@@ -103,13 +108,14 @@ func (s Store) GetTrace(ctx context.Context, tid model.TraceID) (*model.Trace, e
 	}
 	span.SetTag("trace_id", id)
 
-	q := fmt.Sprintf("SELECT * FROM %s.%s spans WHERE spans.trace_id = %s", s.config.Workspace, s.config.Spans, id)
+	sql := fmt.Sprintf("SELECT * FROM %s.%s spans WHERE spans.trace_id = %s", s.config.Workspace, s.config.Spans, id)
+	s.logger.Info("GetTrace query", "sql", sql)
 
-	response, err := s.rc.Query(ctx, q)
+	response, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Debug("matching query", "spans", len(response.Results))
+	s.logger.Info("GetTrace result", "spans", len(response.Results))
 
 	if len(response.Results) == 0 {
 		return nil, spanstore.ErrTraceNotFound
@@ -128,7 +134,8 @@ func (s Store) GetTrace(ctx context.Context, tid model.TraceID) (*model.Trace, e
 		return nil, err
 	}
 
-	for i, s := range spans {
+	for i, span := range spans {
+		s := span
 		trace.Spans[i] = &s
 	}
 
@@ -143,15 +150,15 @@ func (s Store) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryPara
 		return nil, errors.New("start time required")
 	}
 
-	q := buildQuery(s.config, query)
-	s.logger.Trace("query", "sql", q)
+	sql := buildQuery(s.config, query)
+	s.logger.Info("FindTraceIDs", "sql", sql)
 
 	p := paginate.New(s.rc)
 	docs := make(chan map[string]any)
 
 	var err error
 	go func() {
-		err = p.Query(ctx, docs, q)
+		err = p.Query(ctx, docs, sql)
 	}()
 
 	tids := make([]model.TraceID, 0, 100)
@@ -185,6 +192,7 @@ func (s Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParame
 	span, ctx := opentracing.StartSpanFromContext(ctx, "FindTraces")
 	defer span.Finish()
 
+	s.logger.Info("FindTraces")
 	ids, err := s.FindTraceIDs(ctx, query)
 	if err != nil {
 		return nil, err

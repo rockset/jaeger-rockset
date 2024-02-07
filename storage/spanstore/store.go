@@ -170,10 +170,10 @@ func (s Store) findTraces(ctx context.Context, ids []model.TraceID) ([]*model.Tr
 	}
 
 	q := `SELECT * FROM %s.%s spans WHERE spans.trace_id IN (%s)`
-	q2 := fmt.Sprintf(q, s.config.Workspace, s.config.Spans, idList)
-	s.logger.Trace("findTraces query", "sql", q2)
+	sql := fmt.Sprintf(q, s.config.Workspace, s.config.Spans, idList)
+	s.logger.Info("findTraces query", "sql", sql)
 
-	result, err := s.rc.Query(ctx, q2)
+	result, err := s.rc.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
