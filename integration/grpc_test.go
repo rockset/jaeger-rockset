@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/integration"
 	"github.com/rockset/rockset-go-client"
+	"github.com/rockset/rockset-go-client/wait"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rockset/jaeger-rockset/storage"
@@ -88,17 +89,23 @@ func deleteEverything(t *testing.T, rc *rockset.RockClient, cfg rss.Config) func
 				ids[i] = r["_id"].(string)
 			}
 
-			docs, err := rc.DeleteDocuments(ctx, cfg.Workspace, coll, ids)
+			response, err := rc.DeleteDocumentsWithOffset(ctx, cfg.Workspace, coll, ids)
 			if err != nil {
 				return err
 			}
 
-			for _, d := range docs {
+			for _, d := range response.GetData() {
 				if d.GetStatus() != "DELETED" {
 					log.Printf("failed to delete %s: %s", d.GetId(), d.GetStatus())
 				}
 			}
-			t.Logf("%s: deleted %d documents", coll, len(docs))
+			t.Logf("%s: deleted %d documents", coll, len(response.GetData()))
+
+			// wait for the delete to complete
+			w := wait.New(rc)
+			if err = w.UntilQueryable(ctx, cfg.Workspace, coll, []string{response.GetLastOffset()}); err != nil {
+				return err
+			}
 		}
 
 		return nil

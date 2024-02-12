@@ -210,9 +210,10 @@ func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
 	// }
 
 	var q strings.Builder
-	q.WriteString(fmt.Sprintf("SELECT DISTINCT trace_id, start_time FROM %s.%s spans", config.Workspace, config.Spans))
+	q.WriteString("SELECT trace_id, MIN(start_time) AS start_time\n")
+	q.WriteString(fmt.Sprintf("FROM %s.%s spans\n", config.Workspace, config.Spans))
 
-	q.WriteString(" WHERE ")
+	q.WriteString("WHERE ")
 	if query.ServiceName != "" && query.OperationName != "" {
 		q.WriteString(fmt.Sprintf("spans.process.service_name = '%s'", query.ServiceName))
 		q.WriteString(" AND ")
@@ -222,12 +223,12 @@ func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
 	} else if query.OperationName != "" {
 		q.WriteString(fmt.Sprintf("spans.operation_name = '%s'", query.OperationName))
 	}
+	q.WriteString("\n")
 
-	// TODO create the collection with an ingest transformation to avoid parsing on each query
-	q.WriteString(fmt.Sprintf(" AND PARSE_TIMESTAMP_ISO8601(spans.start_time) >= PARSE_TIMESTAMP_ISO8601('%s')",
+	q.WriteString(fmt.Sprintf(" AND spans.start_time >= '%s'",
 		query.StartTimeMin.Format(time.RFC3339Nano)))
 	if !query.StartTimeMax.IsZero() {
-		q.WriteString(fmt.Sprintf(" AND PARSE_TIMESTAMP_ISO8601(spans.start_time) <= PARSE_TIMESTAMP_ISO8601('%s')",
+		q.WriteString(fmt.Sprintf(" AND spans.start_time <= '%s'",
 			query.StartTimeMax.Format(time.RFC3339Nano)))
 	}
 
@@ -238,10 +239,11 @@ func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
 		q.WriteString(fmt.Sprintf(" AND spans.duration <= %d", query.DurationMax))
 	}
 
-	q.WriteString(" ORDER BY spans.start_time DESC, trace_id")
+	q.WriteString("\nGROUP BY trace_id\n")
+	q.WriteString("ORDER BY start_time DESC, trace_id\n")
 
 	if query.NumTraces > 0 {
-		q.WriteString(fmt.Sprintf(" LIMIT %d", query.NumTraces))
+		q.WriteString(fmt.Sprintf("LIMIT %d", query.NumTraces))
 	}
 
 	return q.String()
@@ -284,3 +286,13 @@ func traceIDs(ids []model.TraceID) (string, error) {
 
 	return strings.Join(tids, ","), nil
 }
+
+/*
+SELECT trace_id, MIN(start_time) AS start_time
+FROM test.spans spans
+WHERE spans.process.service_name = 'query11-service'
+AND spans.start_time \u003e= '2024-02-11T15:46:31.639875Z' AND
+spans.start_time \u003c= '2024-02-11T17:46:31.639875Z'\n
+GROUP BY trace_id\nORDER BY start_time DESC, trace_id\n
+LIMIT 1000
+*/
