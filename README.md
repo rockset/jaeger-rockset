@@ -1,6 +1,8 @@
-# Rockset Jaeger Span Storage Plugin
+# Rockset Span Storage Plugin for Jaeger
 
-This is a [gRPC storage plugin]() for Jaeger that stores spans in Rockset.
+This is a [gRPC storage plugin](https://github.com/jaegertracing/jaeger/tree/master/plugin/storage/grpc) for Jaeger that stores spans in Rockset.
+
+It stores spans in a Rockset collection, with each span as a document in the collection, and allows querying and visualization of traces in Jaeger.
 
 ## Kubernetes Deployment
 
@@ -21,8 +23,9 @@ data:
       workspace: tracing
       spans: spans
       operations: operations
-  EOF
 ```
+
+Jaeger deployment with Rockset plugin
 
 ```yaml
 apiVersion: jaegertracing.io/v1
