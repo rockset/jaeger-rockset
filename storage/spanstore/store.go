@@ -235,7 +235,7 @@ func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
 	}
 
 	for k, v := range query.Tags {
-		q.WriteString(fmt.Sprintf(" AND spans.kv.%s = '%s'", k, v))
+		q.WriteString(fmt.Sprintf(` AND spans.kv."%s" = '%s'`, k, v))
 	}
 
 	q.WriteString("\nGROUP BY trace_id\n")
