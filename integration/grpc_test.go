@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"testing"
 
@@ -96,12 +95,12 @@ func deleteEverything(t *testing.T, rc *rockset.RockClient, cfg rss.Config) func
 
 			for _, d := range response.GetData() {
 				if d.GetStatus() != "DELETED" {
-					log.Printf("failed to delete %s: %s", d.GetId(), d.GetStatus())
+					t.Logf("failed to delete %s: %s", d.GetId(), d.GetStatus())
 				}
 			}
 			t.Logf("%s: deleted %d documents", coll, len(response.GetData()))
 
-			// wait for the delete to complete
+			// wait for the deletion to have propagated
 			w := wait.New(rc)
 			if err = w.UntilQueryable(ctx, cfg.Workspace, coll, []string{response.GetLastOffset()}); err != nil {
 				return err

@@ -204,13 +204,8 @@ func (s Store) findTraces(ctx context.Context, ids []model.TraceID) ([]*model.Tr
 
 // TODO: this is very naïve and must be improved to avoid SQL injection
 func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
-	// TODO implement tag filtering
-	// {
-	// 	Tags:map[sameplacetag1:sameplacevalue sameplacetag2:123 sameplacetag3:72.5 sameplacetag4:true]
-	// }
-
 	var q strings.Builder
-	q.WriteString("SELECT trace_id, MIN(start_time) AS start_time\n")
+	q.WriteString("SELECT spans.trace_id AS trace_id, MIN(spans.start_time) AS start_time\n")
 	q.WriteString(fmt.Sprintf("FROM %s.%s spans\n", config.Workspace, config.Spans))
 
 	q.WriteString("WHERE ")
@@ -237,6 +232,10 @@ func buildQuery(config Config, query *spanstore.TraceQueryParameters) string {
 	}
 	if query.DurationMax > 0 {
 		q.WriteString(fmt.Sprintf(" AND spans.duration <= %d", query.DurationMax))
+	}
+
+	for k, v := range query.Tags {
+		q.WriteString(fmt.Sprintf(" AND spans.kv.%s = '%s'", k, v))
 	}
 
 	q.WriteString("\nGROUP BY trace_id\n")
@@ -286,13 +285,3 @@ func traceIDs(ids []model.TraceID) (string, error) {
 
 	return strings.Join(tids, ","), nil
 }
-
-/*
-SELECT trace_id, MIN(start_time) AS start_time
-FROM test.spans spans
-WHERE spans.process.service_name = 'query11-service'
-AND spans.start_time \u003e= '2024-02-11T15:46:31.639875Z' AND
-spans.start_time \u003c= '2024-02-11T17:46:31.639875Z'\n
-GROUP BY trace_id\nORDER BY start_time DESC, trace_id\n
-LIMIT 1000
-*/
