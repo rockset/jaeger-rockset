@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 	"github.com/opentracing/opentracing-go"
@@ -61,6 +62,7 @@ type Store struct {
 	writer  *writer.Writer
 	config  Config
 	counter int
+	cache   *expirable.LRU[string, Operation]
 }
 
 func New(logger hclog.Logger, rc *rockset.RockClient, config Config) (*Store, error) {
@@ -81,6 +83,7 @@ func New(logger hclog.Logger, rc *rockset.RockClient, config Config) (*Store, er
 		rc:     rc,
 		writer: w,
 		config: config,
+		cache:  expirable.NewLRU[string, Operation](100, nil, 5*time.Minute),
 	}, nil
 }
 

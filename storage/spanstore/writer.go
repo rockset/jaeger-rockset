@@ -59,6 +59,12 @@ func (s Store) WriteSpan(_ context.Context, span *model.Span) error {
 	}
 
 	// TODO we should batch these updates, to reduce the number of writes
+	// cache the id to avoid repeatedly updating the operations collection with the same information
+	id := span.Process.ServiceName + ":" + span.OperationName
+	if s.cache.Contains(id) {
+		return nil
+	}
+
 	kind := unspecified
 	for _, tag := range span.Tags {
 		if tag.Key == "span.kind" {
@@ -66,15 +72,18 @@ func (s Store) WriteSpan(_ context.Context, span *model.Span) error {
 		}
 	}
 
+	op := Operation{
+		ID:        id,
+		Service:   span.Process.ServiceName,
+		Operation: span.OperationName,
+		Kind:      kind,
+	}
+	s.cache.Add(id, op)
+
 	s.writer.C() <- writer.Request{
 		Workspace:  s.config.Workspace,
 		Collection: s.config.Operations,
-		Data: Operation{
-			ID:        span.Process.ServiceName + ":" + span.OperationName,
-			Service:   span.Process.ServiceName,
-			Operation: span.OperationName,
-			Kind:      kind,
-		},
+		Data:       op,
 	}
 
 	return nil
